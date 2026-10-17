@@ -5,7 +5,7 @@ import { execSync } from 'node:child_process'
 import { existsSync, writeFileSync, statSync, mkdirSync } from 'node:fs'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import * as XLSX from 'xlsx'
+import XLSX from 'xlsx'
 import { parseLedger } from './ledger-parser.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
@@ -39,7 +39,7 @@ try {
   const outFile = resolve(outDir, 'pile-ledger.json')
   writeFileSync(outFile, JSON.stringify(out))
   console.log(`✓ 已解析 ${out.count} 条记录 → ${outFile}`)
-  console.log('  识别到的列：', Object.entries(out.columns).filter(([, v]) => v >= 0).map(([k]) => k).join('、') || '（未识别到关键列，请检查表头）')
+  console.log('  表头列：', (out.headers || []).slice(0, 20).filter(Boolean).join('、') || '（无）')
 
   // git 提交推送（凭据已缓存，无需输密码）
   const run = (cmd) => execSync(cmd, { cwd: root, stdio: 'pipe', encoding: 'utf-8' })

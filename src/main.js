@@ -133,10 +133,17 @@ function applyPileLedger(data) {
     const day = schedule.dateToDay(rec.date)
     if (day == null) continue
     const bridge = String(rec.bridge || '').trim()
-    const pierDigits = (String(rec.pier || '').match(/\d+/g) || []).pop() || null
+    const pier = String(rec.pier || '')
+    const pierDigits = (pier.match(/\d+/g) || []).pop() || null
+    const side = pier.includes('左') ? 'Z' : pier.includes('右') ? 'Y' : null
     for (const item of schedule.items) {
       if (bridge && !item.id.includes(bridge)) continue
-      if (pierDigits != null && !item.id.endsWith(`-f-${pierDigits}`) && !item.id.endsWith(`-p-${pierDigits}`)) continue
+      // 施工单元编号形如「卢福2号大桥Z-f-5」：侧幅(Z=左/Y=右) + 类型(f=桩基承台/a=桥台) + 墩号
+      // 灌注日期只标记基础单元完成；墩身/盖梁/系梁（p 单元）在承台之后施工，不受桩灌注日期影响
+      const m = item.id.match(/([YZ])-(f|a)-\d+$/)
+      if (!m) continue
+      if (pierDigits != null && !item.id.endsWith(`${m[2]}-${pierDigits}`)) continue
+      if (side && m[1] !== side) continue // 区分左右幅，避免左幅日期误套到右幅
       item.end = Math.max(0, Math.min(schedule.duration, day))
       if (item.start >= item.end) item.start = Math.max(0, item.end - 10)
       applied++

@@ -2,7 +2,7 @@
 chcp 65001 >nul
 cd /d "%~dp0"
 echo ============================================
-echo  桥梁施工台账一键更新
+echo   Bridge pile ledger update
 echo ============================================
 node scripts\update-ledger.mjs
 echo.
