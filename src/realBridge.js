@@ -246,26 +246,27 @@ function buildPier(parent, e, pos, zCenter, groundY, deckBottomHere, bid, sideLa
   const fSched = `${bid}-f-${no}`
   const pSched = `${bid}-p-${no}`
 
-  // 桩基（独立构件）
-  const pileEl = newElement(pg, elements, {
-    id: `${bid}-pile-${no}`, schedId: fSched, group: 'foundation',
-    name: `${sideLabel} 桩基 P${no}`, no,
-    props: { 构件类型: '钻孔灌注桩', 桩径: `${pileD}m`, 桩长: `${Math.round(pileL * 10) / 10}m` }
-  })
-  if (cap) {
-    // 有承台：桩头止于承台底
-    for (const dx of [-cap.x * 0.3, cap.x * 0.3]) {
-      for (const dz of [-cap.z * 0.3, cap.z * 0.3]) {
-        makeMesh(new THREE.CylinderGeometry(pileD / 2, pileD / 2, pileL, 12), COLORS.pile, pileEl, { x: dx, y: pileHeadY - pileL / 2, z: zCenter + dz })
-      }
-    }
-  } else {
-    // 无承台：桩头与地系梁底同高（或地面线）
-    for (const cz of [-COL_SPACING / 2, COL_SPACING / 2]) {
-      for (const dx of [-0.8, 0.8]) {
-        makeMesh(new THREE.CylinderGeometry(pileD / 2, pileD / 2, pileL, 12), COLORS.pile, pileEl, { x: dx, y: pileHeadY - pileL / 2, z: zCenter + cz })
-      }
-    }
+  // 桩基：每根桩按图纸编号拆分为独立构件
+  // 承台墩：4 根桩（a-0/a-1/b-0/b-1，两列×两排）；系梁墩（桩柱式）：2 根桩（0/1，一柱一桩）
+  const pileSpecs = cap
+    ? [
+        { label: 'a0', dx: -cap.x * 0.3, dz: -cap.z * 0.3 },
+        { label: 'b0', dx: cap.x * 0.3, dz: -cap.z * 0.3 },
+        { label: 'a1', dx: -cap.x * 0.3, dz: cap.z * 0.3 },
+        { label: 'b1', dx: cap.x * 0.3, dz: cap.z * 0.3 }
+      ]
+    : [
+        { label: '0', dx: 0, dz: -COL_SPACING / 2 },
+        { label: '1', dx: 0, dz: COL_SPACING / 2 }
+      ]
+  for (const ps of pileSpecs) {
+    const pileNo = cap ? `${no}${ps.label[0]}-${ps.label[1]}` : `${no}-${ps.label}` // 图纸桩号，如 5a-0 / 1-0
+    const pileEl = newElement(pg, elements, {
+      id: `${bid}-pile-${no}-${ps.label}`, schedId: `${fSched}-${ps.label}`, group: 'foundation',
+      name: `${sideLabel} 桩基 ${pileNo}#`, no,
+      props: { 构件类型: '钻孔灌注桩', 桩号: `${pileNo}#`, 桩径: `${pileD}m`, 桩长: `${Math.round(pileL * 10) / 10}m` }
+    })
+    makeMesh(new THREE.CylinderGeometry(pileD / 2, pileD / 2, pileL, 12), COLORS.pile, pileEl, { x: ps.dx, y: pileHeadY - pileL / 2, z: zCenter + ps.dz })
   }
 
   // 承台（独立构件）
@@ -333,7 +334,7 @@ function buildPier(parent, e, pos, zCenter, groundY, deckBottomHere, bid, sideLa
 }
 
 // ===== 桥台（每个构件独立分组：承台/肋板/台盖梁/耳背墙/桩基）=====
-function buildAbutment(parent, e, pos, zCenter, groundY, deckBottomHere, bid, sideLabel, elements) {
+function buildAbutment(parent, e, pos, zCenter, groundY, deckBottomHere, bid, sideLabel, elements, abutPiles = 4) {
   const no = e.no
   const ag = new THREE.Group()
   ag.position.set(pos.x, 0, pos.z)
@@ -406,23 +407,39 @@ function buildAbutment(parent, e, pos, zCenter, groundY, deckBottomHere, bid, si
   })
   makeMesh(new THREE.BoxGeometry(bw.w, bw.h, ac.l), COLORS.abutment, wallEl, { x: -(ac.w / 2 + bw.w / 2), y: deckBottomHere + bw.h / 2, z: zCenter })
 
-  // 桩基（独立构件，桩径/桩长取表格值）
+  // 桩基：每根桩按图纸编号拆分为独立构件（默认 4 根 a-0/a-1/b-0/b-1；中新大桥桥台 2 根 0/1）
   const aPileD = e.pileDia ? parseFloat(e.pileDia) : 1.2
   const aPileL = e.pileLen || 15
-  const pileEl = newElement(ag, elements, {
-    id: `${bid}-apile-${no}`, schedId: aSched, group: 'abutment',
-    name: `${sideLabel} ${label}桥台桩基`, no,
-    props: { 构件类型: '钻孔灌注桩', 桩径: `${aPileD}m`, 桩长: `${aPileL}m` }
-  })
   const hasCap2 = e.cap && /^\s*2\s*[×xX*]/.test(e.cap)
-  const pilePos = hasCap2
-    ? [[-1.2, -3.5], [1.2, -3.5], [-1.2, 3.5], [1.2, 3.5]]
-    : [[-1.5, -2.5], [1.5, -2.5], [-1.5, 2.5], [1.5, 2.5]]
+  const pileSpecs = abutPiles === 2
+    ? [
+        { label: '0', dx: -1.5, dz: 0 },
+        { label: '1', dx: 1.5, dz: 0 }
+      ]
+    : (hasCap2
+        ? [
+            { label: 'a0', dx: -1.2, dz: -3.5 },
+            { label: 'b0', dx: 1.2, dz: -3.5 },
+            { label: 'a1', dx: -1.2, dz: 3.5 },
+            { label: 'b1', dx: 1.2, dz: 3.5 }
+          ]
+        : [
+            { label: 'a0', dx: -1.5, dz: -2.5 },
+            { label: 'b0', dx: 1.5, dz: -2.5 },
+            { label: 'a1', dx: -1.5, dz: 2.5 },
+            { label: 'b1', dx: 1.5, dz: 2.5 }
+          ])
   // 桩头与承台底同高（有承台）或与地面线齐平
   const aCapH = e.cap && !isUType ? abutPileCapDims(e.cap)?.h || 0 : 0
   const aPileHeadY = groundY - aCapH
-  for (const [dx, dz] of pilePos) {
-    makeMesh(new THREE.CylinderGeometry(aPileD / 2, aPileD / 2, aPileL, 12), COLORS.pile, pileEl, { x: dx, y: aPileHeadY - aPileL / 2, z: zCenter + dz })
+  for (const ps of pileSpecs) {
+    const pileNo = abutPiles === 2 ? `${no}-${ps.label}` : `${no}${ps.label[0]}-${ps.label[1]}` // 图纸桩号，如 0a-0 / 0-0
+    const pileEl = newElement(ag, elements, {
+      id: `${bid}-apile-${no}-${ps.label}`, schedId: `${aSched}-${ps.label}`, group: 'abutment',
+      name: `${sideLabel} ${label}桥台桩基 ${pileNo}#`, no,
+      props: { 构件类型: '钻孔灌注桩', 桩号: `${pileNo}#`, 桩径: `${aPileD}m`, 桩长: `${aPileL}m` }
+    })
+    makeMesh(new THREE.CylinderGeometry(aPileD / 2, aPileD / 2, aPileL, 12), COLORS.pile, pileEl, { x: ps.dx, y: aPileHeadY - aPileL / 2, z: zCenter + ps.dz })
   }
 }
 
@@ -677,7 +694,7 @@ export function setTerrainOpacity(terrainGroup, opacity) {
   })
 }
 
-function buildSide(bridge, side, zCenter, deckFn, groundFn, centerline, deckWidth, grade, span, elements, base, geoGroups) {
+function buildSide(bridge, side, zCenter, deckFn, groundFn, centerline, deckWidth, grade, span, elements, base, geoGroups, abutPiles) {
   const list = bridge[side]
   const g = new THREE.Group()
   g.name = `${bridge.name}-${side}`
@@ -698,7 +715,7 @@ function buildSide(bridge, side, zCenter, deckFn, groundFn, centerline, deckWidt
       buildPier(g, e, pos, zCenter, groundY, deckBottomHere, bid, sideLabel, elements, base, geoGroups)
     } else {
       const groundY = groundFn(s) != null ? groundFn(s) : deckBottomHere - 7
-      buildAbutment(g, e, pos, zCenter, groundY, deckBottomHere, bid, sideLabel, elements)
+      buildAbutment(g, e, pos, zCenter, groundY, deckBottomHere, bid, sideLabel, elements, abutPiles)
     }
   }
 
@@ -787,10 +804,10 @@ export function buildRealBridge(bridge) {
   const terrain = buildTerrain(root, terrainProfile(bridge, terrainSide, fns[terrainSide].ground, fns[terrainSide].deck, span), 30, makeCenterline(terrainCurve, terrainStraight))
 
   if (bridge.right && bridge.right.length) {
-    root.add(buildSide(bridge, 'right', DECK_SIDE_OFFSET / 2, fns.right.deck, fns.right.ground, makeCenterline(rightCurve, rightStraight), deckWidth, rightGrade, span, elements, base, geoGroups))
+    root.add(buildSide(bridge, 'right', DECK_SIDE_OFFSET / 2, fns.right.deck, fns.right.ground, makeCenterline(rightCurve, rightStraight), deckWidth, rightGrade, span, elements, base, geoGroups, meta.abutPiles || 4))
   }
   if (bridge.left && bridge.left.length) {
-    root.add(buildSide(bridge, 'left', -DECK_SIDE_OFFSET / 2, fns.left.deck, fns.left.ground, makeCenterline(leftCurve, leftStraight), deckWidth, leftGrade, span, elements, base, geoGroups))
+    root.add(buildSide(bridge, 'left', -DECK_SIDE_OFFSET / 2, fns.left.deck, fns.left.ground, makeCenterline(leftCurve, leftStraight), deckWidth, leftGrade, span, elements, base, geoGroups, meta.abutPiles || 4))
   }
 
   return { group: root, elements, terrain, geoGroups }

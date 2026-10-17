@@ -136,14 +136,24 @@ function applyPileLedger(data) {
     const pier = String(rec.pier || '')
     const pierDigits = (pier.match(/\d+/g) || []).pop() || null
     const side = pier.includes('左') ? 'Z' : pier.includes('右') ? 'Y' : null
+    // 桩号如「左幅5a-0#」/「左幅1-0#」→ 桩位标签（a0 / 0）
+    let pileLabel = null
+    const pm = String(rec.pileNo || '').match(/(\d+)([a-z])?-(\d+)(?=[#]?\s*$)/)
+    if (pm) pileLabel = (pm[2] || '') + pm[3]
     for (const item of schedule.items) {
       if (bridge && !item.id.includes(bridge)) continue
-      // 施工单元编号形如「卢福2号大桥Z-f-5」：侧幅(Z=左/Y=右) + 类型(f=桩基承台/a=桥台) + 墩号
-      // 灌注日期只标记基础单元完成；墩身/盖梁/系梁（p 单元）在承台之后施工，不受桩灌注日期影响
-      const m = item.id.match(/([YZ])-(f|a)-\d+$/)
+      // 施工单元编号形如「卢福2号大桥Z-f-5-a0」：
+      // 侧幅(Z=左/Y=右) + 类型(f=桩基/承台、a=桥台) + 墩号 + 桩位标签（单桩）或整体单元（承台）
+      // 灌注日期只标记桩基；墩身/盖梁/系梁（p 单元）在承台之后施工，不受桩灌注日期影响
+      const m = item.id.match(/([YZ])-(f|a)-(\d+)(?:-([a-z]?\d+))?$/)
       if (!m) continue
-      if (pierDigits != null && !item.id.endsWith(`${m[2]}-${pierDigits}`)) continue
+      if (pierDigits != null && m[3] !== pierDigits) continue
       if (side && m[1] !== side) continue // 区分左右幅，避免左幅日期误套到右幅
+      if (pileLabel != null) {
+        if (m[4] !== pileLabel) continue // 有桩号时精确到单根桩
+      } else if (m[4] !== undefined) {
+        continue // 无桩号时只标记整墩基础单元（承台）
+      }
       item.end = Math.max(0, Math.min(schedule.duration, day))
       if (item.start >= item.end) item.start = Math.max(0, item.end - 10)
       applied++
