@@ -4,11 +4,14 @@ import XLSX from 'xlsx'
 
 export function parseLedger(wb) {
   const all = []
+  let lastHeaders = []
   // 遍历全部工作表（统计表日期常为空、资料表才有实际日期），合并后按记录去重
   for (const name of wb.SheetNames) {
     const sheet = wb.Sheets[name]
     const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false, defval: '' })
-    all.push(...parseSheet(rows, name))
+    const parsed = parseSheet(rows, name)
+    if (parsed.length && parsed.headers) lastHeaders = parsed.headers
+    all.push(...parsed)
   }
   const seen = new Set()
   const records = all.filter((r) => {
@@ -17,7 +20,7 @@ export function parseLedger(wb) {
     seen.add(k)
     return true
   })
-  return { records, count: records.length, sheets: wb.SheetNames, headers: all.length ? all.headers : [] }
+  return { records, count: records.length, sheets: wb.SheetNames, headers: lastHeaders }
 }
 
 function parseSheet(rows, name) {
