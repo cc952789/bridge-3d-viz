@@ -65,7 +65,7 @@ async function init() {
   populateBridgeSelector()
   loadDemo()
   setMode('model')
-  applyDay(0)
+  applyToday()
   wireScheduleEditor()
   wireFilter()
   wireCutaway()
@@ -184,6 +184,7 @@ function loadDemo() {
   buildGantt()
   updateStats()
   fitCamera(group)
+  applyToday()
   toast('已载入示例桥梁')
 }
 
@@ -214,6 +215,7 @@ function loadRealBridge(index) {
   updateStats()
   if (lastLedgerData) applyPileLedger(lastLedgerData)
   fitCamera(group)
+  applyToday()
   toast(`已载入 ${bridge.name}（${elements.length} 个施工单元）`)
 }
 
@@ -365,6 +367,17 @@ function wireFilter() {
       schedule.setFilter(row.dataset.filter)
     })
   })
+}
+
+// 时间轴默认定位到"今天"（超出工期时取边界），打开页面即可看到当前施工状态
+function applyToday() {
+  if (!schedule.startDate) {
+    applyDay(0)
+    return
+  }
+  const today = schedule.dateToDay(new Date().toISOString().slice(0, 10))
+  const day = today == null ? 0 : Math.max(0, Math.min(Math.round(today), schedule.duration))
+  applyDay(day)
 }
 
 function applyDay(day) {
