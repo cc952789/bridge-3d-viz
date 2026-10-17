@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>桥梁施工全景 3D 可视化系统</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div id="app">
+      <header id="toolbar">
+        <div class="brand">
+          <span class="brand-dot"></span>
+          <h1>桥梁施工全景 3D 可视化系统</h1>
+          <span class="badge">原型 Prototype</span>
+        </div>
+        <div class="toolbar-actions">
+          <button id="btn-model" class="mode-btn active" title="查看 3D 桥梁模型">🏗 3D 模型</button>
+          <button id="btn-pano" class="mode-btn" title="进入 360° 全景漫游">🌐 全景漫游</button>
+          <span class="divider"></span>
+          <label class="file-btn" title="拖拽或选择 .ifc 文件导入 BIM 模型">
+            导入 IFC
+            <input type="file" id="ifc-input" accept=".ifc" hidden />
+          </label>
+          <button id="btn-demo" title="重新载入内置示例桥梁">载入示例桥梁</button>
+          <select id="bridge-select" title="选择要查看的桥梁（来自统计表）"></select>
+          <button id="btn-reset-schedule" title="清空所有排期修改，恢复默认进度">重置排期</button>
+          <button id="btn-cutaway" title="将地形设为半透明，显示地下桩基础">地下剖面</button>
+          <button id="btn-geology" class="active" title="显示/隐藏钻孔地质分层柱状体">地质层</button>
+          <button id="btn-ledger-refresh" title="立即从 pile-ledger.xlsx 同步灌注混凝土日期">刷新台账</button>
+        </div>
+      </header>
+
+      <main id="viewport">
+        <div id="canvas-container"></div>
+
+        <div id="pano-hud" class="hidden">
+          <div class="pano-name" id="pano-name">场地全景</div>
+          <div class="pano-tip">🖱 拖动查看四周 · 点击热点跳转机位</div>
+        </div>
+
+        <div id="drop-hint" class="hidden">
+          <div class="drop-box">松开鼠标，导入 IFC 模型（.ifc）</div>
+        </div>
+
+        <aside id="info-panel" class="hidden">
+          <div class="info-header">
+            <span id="info-title">构件信息</span>
+            <button id="info-close" title="关闭">×</button>
+          </div>
+          <div id="info-body"></div>
+          <div id="schedule-editor" class="hidden">
+            <div class="sched-title">施工排期</div>
+            <div class="sched-row"><label for="sched-start">开工日期</label><input type="date" id="sched-start" /></div>
+            <div class="sched-row"><label for="sched-end">完工日期</label><input type="date" id="sched-end" /></div>
+            <div class="sched-actions"><button id="sched-save">保存排期</button></div>
+            <div class="sched-hint" id="sched-hint"></div>
+          </div>
+        </aside>
+
+        <div id="legend">
+          <div class="legend-title">施工状态（点击筛选）</div>
+          <div class="legend-row filter-row active" data-filter="all"><span class="dot dot-all"></span>全部 <span class="stat-num" id="stat-total">0</span></div>
+          <div class="legend-row filter-row" data-filter="pending"><span class="dot dot-pending"></span>未施工 <span class="stat-num" id="stat-pending">0</span></div>
+          <div class="legend-row filter-row" data-filter="active"><span class="dot dot-active"></span>施工中 <span class="stat-num" id="stat-active">0</span></div>
+          <div class="legend-row filter-row" data-filter="done"><span class="dot dot-done"></span>已完成 <span class="stat-num" id="stat-done">0</span></div>
+        </div>
+      </main>
+
+      <footer id="timeline">
+        <div class="timeline-controls">
+          <button id="btn-play" title="播放 / 暂停">▶</button>
+          <button id="btn-speed" title="切换播放速度">1×</button>
+          <div class="slider-wrap">
+            <input type="range" id="slider" min="0" max="100" value="0" />
+          </div>
+          <div id="time-label">第 0 天 / 共 0 天</div>
+        </div>
+        <div id="gantt">
+          <div id="gantt-rows"></div>
+          <div id="gantt-playhead"></div>
+        </div>
+      </footer>
+    </div>
+
+    <div id="tooltip" class="hidden"></div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

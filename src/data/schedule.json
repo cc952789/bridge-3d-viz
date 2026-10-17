@@ -1,0 +1,23 @@
+{
+  "duration": 120,
+  "startDate": "2026-03-01",
+  "items": [
+    { "id": "foundation-1", "name": "桩基承台 P1", "group": "foundation", "start": 0, "end": 20 },
+    { "id": "foundation-2", "name": "桩基承台 P2", "group": "foundation", "start": 8, "end": 28 },
+    { "id": "foundation-3", "name": "桩基承台 P3", "group": "foundation", "start": 16, "end": 36 },
+    { "id": "foundation-4", "name": "桩基承台 P4", "group": "foundation", "start": 24, "end": 44 },
+    { "id": "abutment-w", "name": "桥台（西）", "group": "abutment", "start": 20, "end": 42 },
+    { "id": "abutment-e", "name": "桥台（东）", "group": "abutment", "start": 24, "end": 46 },
+    { "id": "pier-1", "name": "桥墩 P1", "group": "pier", "start": 28, "end": 48 },
+    { "id": "pier-2", "name": "桥墩 P2", "group": "pier", "start": 34, "end": 54 },
+    { "id": "pier-3", "name": "桥墩 P3", "group": "pier", "start": 40, "end": 60 },
+    { "id": "pier-4", "name": "桥墩 P4", "group": "pier", "start": 46, "end": 66 },
+    { "id": "girder-1", "name": "主梁 G1", "group": "superstructure", "start": 58, "end": 70 },
+    { "id": "girder-2", "name": "主梁 G2", "group": "superstructure", "start": 63, "end": 75 },
+    { "id": "girder-3", "name": "主梁 G3", "group": "superstructure", "start": 68, "end": 80 },
+    { "id": "girder-4", "name": "主梁 G4", "group": "superstructure", "start": 73, "end": 85 },
+    { "id": "girder-5", "name": "主梁 G5", "group": "superstructure", "start": 78, "end": 90 },
+    { "id": "deck", "name": "桥面板", "group": "deck", "start": 85, "end": 102 },
+    { "id": "railing", "name": "防撞护栏", "group": "deck", "start": 96, "end": 116 }
+  ]
+}

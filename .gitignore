@@ -1,0 +1,8 @@
+node_modules/
+dist/
+tmp/
+*.zip
+chi_sim.traineddata
+.DS_Store
+Thumbs.db
+*.log
