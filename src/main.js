@@ -238,9 +238,13 @@ function generateBridgeSchedule(elements) {
   const decks = all.filter((u) => u.group === 'deck')
 
   const items = []
-  let day = 0
-  abut.forEach((a, i) => items.push({ id: a.id, name: a.name, group: 'abutment', start: i * 4, end: i * 4 + 20 }))
-  day = 20
+  // 未施工构件的默认排期整体规划到 2027 年；台账中已灌注的构件由 applyPileLedger 按实际日期覆盖
+  const planStart = schedule.startDate
+    ? Math.max(0, Math.round((Date.parse('2027-01-01') - schedule.startDate.getTime()) / 86400000))
+    : 0
+  let day = planStart
+  abut.forEach((a, i) => items.push({ id: a.id, name: a.name, group: 'abutment', start: planStart + i * 4, end: planStart + i * 4 + 20 }))
+  day = planStart + 20
   found.forEach((f) => { items.push({ id: f.id, name: f.name, group: 'foundation', start: day, end: day + 14 }); day += 3 })
   piers.forEach((p) => { items.push({ id: p.id, name: p.name, group: 'pier', start: day, end: day + 16 }); day += 3 })
   supers.forEach((s) => items.push({ id: s.id, name: s.name, group: 'superstructure', start: day, end: day + 22 }))
