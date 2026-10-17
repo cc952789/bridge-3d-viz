@@ -6,3 +6,5 @@ chi_sim.traineddata
 .DS_Store
 Thumbs.db
 *.log
+# 台账原始文件不提交（避免公开内部数据），只提交解析后的 public/data/pile-ledger.json
+pile-ledger.xlsx

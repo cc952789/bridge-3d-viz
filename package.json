@@ -10,6 +10,7 @@
     "preview": "vite preview",
     "deploy:cos": "node scripts/deploy-cos.mjs",
     "cos:enable-site": "node scripts/enable-website.mjs",
+    "ledger:update": "node scripts/update-ledger.mjs",
     "postinstall": "node scripts/copy-wasm.mjs"
   },
   "dependencies": {

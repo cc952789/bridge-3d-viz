@@ -98,20 +98,30 @@ let lastLedgerMtime = 0
 
 async function fetchPileLedger(manual = false) {
   try {
-    const res = await fetch('/api/pile-ledger', { cache: 'no-store' })
-    const data = await res.json()
+    // 双数据源：开发模式优先走 Vite 中间件（实时读 xlsx），
+    // 线上（GitHub Pages）读部署时生成的台账 JSON；没有台账时静默跳过
+    let data = null
+    try {
+      const res = await fetch('/api/pile-ledger', { cache: 'no-store' })
+      if (res.ok) data = await res.json()
+    } catch (e) { /* 线上无此接口，走 JSON */ }
+    if (!data || !data.ok) {
+      const res = await fetch(`./data/pile-ledger.json?t=${Date.now()}`, { cache: 'no-store' })
+      if (!res.ok) return
+      data = await res.json()
+    }
     if (!data.ok) {
       if (manual) toast('台账不可用：' + (data.error || '未知错误'))
       return
     }
-    if (data.mtimeMs === lastLedgerMtime) return // 文件没变化，跳过
+    if (data.mtimeMs === lastLedgerMtime) return // 数据没变化，跳过
     lastLedgerMtime = data.mtimeMs || 0
     lastLedgerData = data
     const n = applyPileLedger(data)
     if (n > 0) toast(`台账已同步：${n} 个构件完成时间已按灌注日期更新（${data.count} 条记录）`)
     else toast(`台账已读取：${data.count} 条记录，未匹配到当前桥梁的构件`)
   } catch (e) {
-    if (manual) toast('无法读取台账：请把导出的台账命名为 pile-ledger.xlsx 放到项目根目录，然后重启 npm run dev')
+    if (manual) toast('无法读取台账：请把导出的台账命名为 pile-ledger.xlsx 放到项目根目录，然后双击「更新台账.bat」')
   }
 }
 
