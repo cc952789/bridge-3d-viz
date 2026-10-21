@@ -2,8 +2,8 @@
 chcp 65001 >nul
 cd /d "%~dp0"
 echo ============================================
-echo   Bridge pile ledger update
+echo   Bridge site data sync (photos + ledger)
 echo ============================================
-node scripts\update-ledger.mjs
+node scripts\sync-site.mjs
 echo.
 pause

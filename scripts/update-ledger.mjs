@@ -41,6 +41,11 @@ try {
   console.log(`✓ 已解析 ${out.count} 条记录 → ${outFile}`)
   console.log('  表头列：', (out.headers || []).slice(0, 20).filter(Boolean).join('、') || '（无）')
 
+  // --no-git：只生成 JSON，不提交推送（由 sync-site.mjs 统一提交）
+  if (process.argv.includes('--no-git')) {
+    console.log('（--no-git：已生成数据文件，跳过 git 提交）')
+    process.exit(0)
+  }
   // git 提交推送（凭据已缓存，无需输密码）
   const run = (cmd) => execSync(cmd, { cwd: root, stdio: 'pipe', encoding: 'utf-8' })
   const changed = run('git status --porcelain').trim()

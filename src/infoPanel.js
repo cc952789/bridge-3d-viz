@@ -44,5 +44,42 @@ export function createInfoPanel() {
     panel.classList.add('hidden')
   }
 
-  return { show, hide }
+  // 施工影像：在属性表下方追加照片缩略图网格
+  function showPhotos(photos) {
+    if (!photos || !photos.length) return
+    const sec = document.createElement('div')
+    sec.className = 'photo-section'
+    const h = document.createElement('div')
+    h.className = 'photo-title'
+    h.textContent = `📷 施工影像（${photos.length}）`
+    sec.append(h)
+    const grid = document.createElement('div')
+    grid.className = 'photo-grid'
+    for (const url of photos.slice(0, 12)) {
+      const img = document.createElement('img')
+      img.src = url
+      img.loading = 'lazy'
+      img.title = '点击放大'
+      img.addEventListener('click', () => openLightbox(url))
+      grid.append(img)
+    }
+    sec.append(grid)
+    body.append(sec)
+  }
+
+  function openLightbox(src) {
+    let lb = document.getElementById('photo-lightbox')
+    if (!lb) {
+      lb = document.createElement('div')
+      lb.id = 'photo-lightbox'
+      const im = document.createElement('img')
+      lb.append(im)
+      document.body.append(lb)
+      lb.addEventListener('click', () => lb.classList.remove('show'))
+    }
+    lb.querySelector('img').src = src
+    lb.classList.add('show')
+  }
+
+  return { show, hide, showPhotos }
 }

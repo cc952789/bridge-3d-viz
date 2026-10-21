@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { STATUS_STYLE } from './schedule4d.js'
 
 // 依据桥梁统计表（下部结构）与桥型布置图生成三维桥梁。
 // 上部结构：预应力砼小箱梁（先简支后连续）；桥面净宽按 meta.deckWidth；
@@ -67,6 +68,85 @@ function makeMesh(geometry, colorHex, parent, { x = 0, y = 0, z = 0, ry = 0, met
   m.userData = { baseColor: new THREE.Color(colorHex) }
   parent.add(m)
   return m
+}
+
+// ===== 桩基实例化渲染：整幅桥的桩合并为一个 InstancedMesh，绘制调用从数百次降到 1 次 =====
+const HIGHLIGHT_COLOR = 0xff8800
+
+function buildPileInstances(parent, entries) {
+  const count = entries.length
+  const geo = new THREE.CylinderGeometry(1, 1, 1, 12) // 单位圆柱，实例矩阵缩放成实际桩径/桩长
+  const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.8, transparent: true })
+  const mesh = new THREE.InstancedMesh(geo, mat, count)
+  mesh.castShadow = true
+  mesh.receiveShadow = true
+  mesh.frustumCulled = false // 实例矩阵动态变化（状态过滤），禁用视锥剔除避免误消隐
+  mesh.userData.pileEntries = entries
+
+  // 实例颜色 + 逐实例透明度（注入材质）
+  const colors = new THREE.InstancedBufferAttribute(new Float32Array(count * 3), 3)
+  mesh.instanceColor = colors
+  const alphaAttr = new THREE.InstancedBufferAttribute(new Float32Array(count), 1)
+  geo.setAttribute('iAlpha', alphaAttr)
+  mat.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nattribute float iAlpha;\nvarying float vAlpha;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\n  vAlpha = iAlpha;')
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying float vAlpha;')
+      .replace('#include <opacity_fragment>', 'diffuseColor.a *= vAlpha;')
+  }
+
+  const m4 = new THREE.Matrix4()
+  const q = new THREE.Quaternion()
+  const p = new THREE.Vector3()
+  const s = new THREE.Vector3()
+  const c = new THREE.Color()
+
+  entries.forEach((en, i) => {
+    en.state = { status: 'done', visible: true, highlighted: false }
+    en.el.userData.pileTop = new THREE.Vector3(en.x, en.y + en.L / 2, en.z) // 桩顶局部坐标（标签定位用）
+    const apply = () => {
+      const st = en.state
+      if (!st.visible) {
+        s.set(0, 0, 0) // 隐藏：缩放为 0
+        m4.compose(p, q, s)
+        mesh.setMatrixAt(i, m4)
+        mesh.instanceMatrix.needsUpdate = true
+        return
+      }
+      p.set(en.x, en.y, en.z)
+      s.set(en.r, en.L, en.r)
+      m4.compose(p, q, s)
+      // 桩位于墩组（pg）局部坐标，实例矩阵需换算到本批次（侧幅组）空间
+      m4.premultiply(en.pg.matrix)
+      mesh.setMatrixAt(i, m4)
+      mesh.instanceMatrix.needsUpdate = true
+      const style = STATUS_STYLE[st.status] || STATUS_STYLE.done
+      c.set(st.highlighted ? HIGHLIGHT_COLOR : style.color)
+      mesh.setColorAt(i, c)
+      alphaAttr.setX(i, style.alpha)
+      alphaAttr.needsUpdate = true
+      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
+    }
+    // Schedule4D.applyDay 与高亮通过这两个钩子驱动实例
+    en.el.userData.applyStatusOverride = (status, visible) => {
+      en.state.status = status
+      en.state.visible = visible
+      apply()
+    }
+    en.el.userData.highlightOverride = (on) => {
+      en.state.highlighted = on
+      apply()
+    }
+    apply()
+  })
+
+  mesh.instanceMatrix.needsUpdate = true
+  alphaAttr.needsUpdate = true
+  if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
+  parent.add(mesh)
+  return mesh
 }
 
 function newElement(parent, elements, { id, schedId = id, group, name, no = 0, props = {} }) {
@@ -213,7 +293,7 @@ function buildGeologyColumn(parent, e, zCenter, groundY, base) {
 }
 
 // ===== 桥墩（每个构件独立分组：桩基/承台/墩身/墩盖梁/地系梁/中系梁）=====
-function buildPier(parent, e, pos, zCenter, groundY, deckBottomHere, bid, sideLabel, elements, base, geoGroups) {
+function buildPier(parent, e, pos, zCenter, groundY, deckBottomHere, bid, sideLabel, elements, base, geoGroups, pileBatch) {
   const no = e.no
   const section = colSection(e.colDia)
   const cbh = e.capBeam ? capBeamDims(e.capBeam).h : 1.4
@@ -266,7 +346,8 @@ function buildPier(parent, e, pos, zCenter, groundY, deckBottomHere, bid, sideLa
       name: `${sideLabel} 桩基 ${pileNo}#`, no,
       props: { 构件类型: '钻孔灌注桩', 桩号: `${pileNo}#`, 桩径: `${pileD}m`, 桩长: `${Math.round(pileL * 10) / 10}m` }
     })
-    makeMesh(new THREE.CylinderGeometry(pileD / 2, pileD / 2, pileL, 12), COLORS.pile, pileEl, { x: ps.dx, y: pileHeadY - pileL / 2, z: zCenter + ps.dz })
+    pileEl.userData.pileNo = pileNo // 桩号（供标签显示/影像关联使用）
+    pileBatch.entries.push({ el: pileEl, pg, x: ps.dx, y: pileHeadY - pileL / 2, z: zCenter + ps.dz, r: pileD / 2, L: pileL })
   }
 
   // 承台（独立构件）
@@ -331,10 +412,11 @@ function buildPier(parent, e, pos, zCenter, groundY, deckBottomHere, bid, sideLa
     const geoG = buildGeologyColumn(pg, e, zCenter, groundY, base)
     if (geoG) geoGroups.push(geoG)
   }
+  pg.updateMatrix() // 供桩基实例化批次换算实例矩阵
 }
 
 // ===== 桥台（每个构件独立分组：承台/肋板/台盖梁/耳背墙/桩基）=====
-function buildAbutment(parent, e, pos, zCenter, groundY, deckBottomHere, bid, sideLabel, elements, abutPiles = 4) {
+function buildAbutment(parent, e, pos, zCenter, groundY, deckBottomHere, bid, sideLabel, elements, abutPiles = 4, pileBatch) {
   const no = e.no
   const ag = new THREE.Group()
   ag.position.set(pos.x, 0, pos.z)
@@ -439,8 +521,10 @@ function buildAbutment(parent, e, pos, zCenter, groundY, deckBottomHere, bid, si
       name: `${sideLabel} ${label}桥台桩基 ${pileNo}#`, no,
       props: { 构件类型: '钻孔灌注桩', 桩号: `${pileNo}#`, 桩径: `${aPileD}m`, 桩长: `${aPileL}m` }
     })
-    makeMesh(new THREE.CylinderGeometry(aPileD / 2, aPileD / 2, aPileL, 12), COLORS.pile, pileEl, { x: ps.dx, y: aPileHeadY - aPileL / 2, z: zCenter + ps.dz })
+    pileEl.userData.pileNo = pileNo
+    pileBatch.entries.push({ el: pileEl, pg: ag, x: ps.dx, y: aPileHeadY - aPileL / 2, z: zCenter + ps.dz, r: aPileD / 2, L: aPileL })
   }
+  ag.updateMatrix()
 }
 
 // ===== 上部结构（小箱梁 + 桥面 + 护栏），逐跨分段（可随曲线/纵坡）=====
@@ -701,6 +785,7 @@ function buildSide(bridge, side, zCenter, deckFn, groundFn, centerline, deckWidt
   const bid = `${bridge.name}${side === 'right' ? 'Y' : 'Z'}`
   const sideLabel = side === 'right' ? '右幅' : '左幅'
 
+  const pileBatch = { entries: [] }
   for (const e of list) {
     const s = e.no * span
     const pos = centerline(s)
@@ -712,12 +797,14 @@ function buildSide(bridge, side, zCenter, deckFn, groundFn, centerline, deckWidt
       if (groundY == null) {
         groundY = deckBottomHere - cbh - (e.pierH != null ? e.pierH : e.height)
       }
-      buildPier(g, e, pos, zCenter, groundY, deckBottomHere, bid, sideLabel, elements, base, geoGroups)
+      buildPier(g, e, pos, zCenter, groundY, deckBottomHere, bid, sideLabel, elements, base, geoGroups, pileBatch)
     } else {
       const groundY = groundFn(s) != null ? groundFn(s) : deckBottomHere - 7
-      buildAbutment(g, e, pos, zCenter, groundY, deckBottomHere, bid, sideLabel, elements, abutPiles)
+      buildAbutment(g, e, pos, zCenter, groundY, deckBottomHere, bid, sideLabel, elements, abutPiles, pileBatch)
     }
   }
+  // 桩基合并为实例化渲染（整幅 1 次绘制调用）
+  if (pileBatch.entries.length) buildPileInstances(g, pileBatch.entries)
 
   buildSuperstructure(g, bid, sideLabel, list, centerline, zCenter, deckFn, deckWidth, grade, span, elements)
   return g

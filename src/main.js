@@ -52,6 +52,7 @@ const schedHint = document.getElementById('sched-hint')
 const btnResetSchedule = document.getElementById('btn-reset-schedule')
 const bridgeSelect = document.getElementById('bridge-select')
 const btnCutaway = document.getElementById('btn-cutaway')
+const btnLabels = document.getElementById('btn-labels')
 const tooltip = document.getElementById('tooltip')
 
 // ===== 初始化 =====
@@ -69,8 +70,74 @@ async function init() {
   wireFilter()
   wireCutaway()
   wireGeology()
+  wirePileLabels()
   wireLedger()
   animate()
+}
+
+// ===== 桩号标签（视角拉近时显示图纸桩号）=====
+let pileLabelsOn = false
+let pileSprites = [] // { sprite, object }
+const _tmpV = new THREE.Vector3()
+
+function clearPileSprites() {
+  for (const s of pileSprites) {
+    s.sprite.parent?.remove(s.sprite)
+    s.sprite.material.map?.dispose()
+    s.sprite.material.dispose()
+  }
+  pileSprites = []
+}
+
+function buildPileSprites() {
+  clearPileSprites()
+  if (!currentModel) return
+  for (const { object } of currentModel.elements) {
+    const ud = object.userData
+    if (!ud.pileNo || !ud.pileTop) continue
+    const c = document.createElement('canvas')
+    c.width = 128
+    c.height = 36
+    const ctx = c.getContext('2d')
+    ctx.fillStyle = 'rgba(18,22,28,.78)'
+    ctx.fillRect(0, 0, 128, 36)
+    ctx.strokeStyle = 'rgba(255,255,255,.35)'
+    ctx.strokeRect(0.5, 0.5, 127, 35)
+    ctx.fillStyle = '#e8eef5'
+    ctx.font = 'bold 22px sans-serif'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText(ud.pileNo, 64, 19)
+    const tex = new THREE.CanvasTexture(c)
+    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }))
+    sprite.scale.set(9, 2.5, 1)
+    sprite.position.copy(ud.pileTop)
+    sprite.visible = false
+    object.add(sprite)
+    pileSprites.push({ sprite, object })
+  }
+}
+
+function wirePileLabels() {
+  btnLabels.addEventListener('click', () => {
+    pileLabelsOn = !pileLabelsOn
+    btnLabels.classList.toggle('active', pileLabelsOn)
+    if (pileLabelsOn) {
+      if (!pileSprites.length) buildPileSprites()
+    } else {
+      for (const s of pileSprites) s.sprite.visible = false
+    }
+    toast(pileLabelsOn ? '桩号标签已开启：拉近视角查看每根桩的编号' : '桩号标签已关闭')
+  })
+}
+
+function updatePileLabels() {
+  if (!pileLabelsOn || !pileSprites.length) return
+  const camPos = viewer.camera.position
+  for (const s of pileSprites) {
+    s.sprite.getWorldPosition(_tmpV)
+    s.sprite.visible = s.object.visible && _tmpV.distanceTo(camPos) < 130
+  }
 }
 
 function wireGeology() {
@@ -167,12 +234,45 @@ function applyPileLedger(data) {
 }
 
 function wireLedger() {
-  document.getElementById('btn-ledger-refresh').addEventListener('click', () => fetchPileLedger(true))
+  document.getElementById('btn-ledger-refresh').addEventListener('click', () => {
+    fetchPileLedger(true)
+    fetchPhotosManifest().then(() => toast('施工影像清单已刷新'))
+  })
   fetchPileLedger() // 启动时拉取一次
+  fetchPhotosManifest() // 启动时拉取施工影像清单
   setInterval(() => fetchPileLedger(false), 30000) // 每 30 秒轮询
 }
 
+// ===== 施工影像清单（photos/photos.json，由「更新台账.bat」生成）=====
+let photosManifest = null
+
+async function fetchPhotosManifest() {
+  try {
+    const res = await fetch(`./data/photos.json?t=${Date.now()}`, { cache: 'no-store' })
+    if (res.ok) photosManifest = await res.json()
+  } catch (e) {
+    /* 尚无影像数据时忽略 */
+  }
+}
+
+// 按「桥|幅|桩号」或「桥|幅|墩号」匹配关联照片
+function photosForElement(ud) {
+  if (!photosManifest || !photosManifest.photos) return null
+  const m = String(ud.id || '').match(/^(.*?)([YZ])-(?:f|p|a)-(\d+)/)
+  if (!m) return null
+  const side = m[2] === 'Y' ? '右' : '左'
+  const keys = []
+  if (ud.pileNo) keys.push(`${m[1]}|${side}|${ud.pileNo}`) // 单桩照片优先
+  keys.push(`${m[1]}|${side}|${m[3]}`) // 墩级照片兜底
+  for (const k of keys) {
+    const list = photosManifest.photos[k]
+    if (list && list.length) return list
+  }
+  return null
+}
+
 function loadDemo() {
+  clearPileSprites()
   if (currentModel) viewer.scene.remove(currentModel.group)
   if (currentIfc) {
     try { currentIfc.ifcApi.CloseModel(currentIfc.modelID) } catch (e) { /* ignore */ }
@@ -200,6 +300,7 @@ function loadDemo() {
 function loadRealBridge(index) {
   const bridge = bridgesData.bridges[index]
   if (!bridge) return
+  clearPileSprites()
   if (currentModel) viewer.scene.remove(currentModel.group)
   if (currentIfc) {
     try { currentIfc.ifcApi.CloseModel(currentIfc.modelID) } catch (e) { /* ignore */ }
@@ -532,6 +633,11 @@ function onPick(e) {
 
 function findElement(hits) {
   for (const h of hits) {
+    // 实例化渲染的桩：命中批次网格 → 按实例序号定位构件
+    if (h.instanceId != null && h.object.userData.pileEntries) {
+      const en = h.object.userData.pileEntries[h.instanceId]
+      if (en) return en.el
+    }
     let o = h.object
     while (o) {
       if (o.userData && o.userData.isElement) return o
@@ -635,6 +741,8 @@ async function showElementInfo(el) {
       rows.push(['施工时段', ds ? `${ds} ~ ${de}（第 ${item.start}~${item.end} 天）` : `第 ${item.start} ~ ${item.end} 天`])
     }
     infoPanel.show(ud.name, ud.props.构件类型, rows)
+    const photos = photosForElement(ud)
+    if (photos) infoPanel.showPhotos(photos)
   }
 
   populateScheduleEditor(ud)
@@ -678,6 +786,10 @@ function setHighlight(obj, on) {
 }
 
 function setEmissive(obj, color) {
+  if (obj.userData.highlightOverride) {
+    obj.userData.highlightOverride(color !== 0x000000)
+    return
+  }
   obj.traverse((o) => {
     if (o.isMesh && o.material) {
       if (!o.material.emissive) o.material.emissive = new THREE.Color(0)
@@ -867,6 +979,7 @@ function animate() {
   if (mode === 'pano') {
     pano.render()
   } else {
+    updatePileLabels()
     viewer.render()
   }
 }

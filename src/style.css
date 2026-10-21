@@ -269,3 +269,84 @@ button.active { background: var(--accent); border-color: var(--accent); color: #
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* 施工影像 */
+.photo-section {
+  margin-top: 12px;
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+.photo-title { font-size: 12px; color: var(--text-dim); margin-bottom: 8px; }
+.photo-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+.photo-grid img {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: transform .15s;
+}
+.photo-grid img:hover { transform: scale(1.04); }
+#photo-lightbox {
+  position: fixed; inset: 0; z-index: 300;
+  background: rgba(8, 10, 15, .88);
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0; pointer-events: none; transition: opacity .2s;
+}
+#photo-lightbox.show { opacity: 1; pointer-events: auto; }
+#photo-lightbox img {
+  max-width: 92vw; max-height: 92vh;
+  border-radius: 8px; box-shadow: 0 10px 50px rgba(0,0,0,.6);
+}
+
+/* ===== 移动端适配（平板/手机） ===== */
+@media (max-width: 900px) {
+  #toolbar {
+    height: auto;
+    flex: 0 0 auto;
+    flex-wrap: wrap;
+    padding: 8px 10px;
+    gap: 8px;
+  }
+  .brand h1 { font-size: 13px; }
+  .badge { display: none; }
+  .toolbar-actions { flex-wrap: wrap; gap: 6px; }
+  .toolbar-actions button { padding: 8px 10px; font-size: 12px; min-height: 38px; }
+  #bridge-select { max-width: 130px; font-size: 12px; }
+  .divider { display: none; }
+
+  /* 信息面板 → 底部抽屉 */
+  #info-panel {
+    top: auto; bottom: 0; left: 0; right: 0; width: 100%;
+    max-height: 46vh; border-radius: 14px 14px 0 0;
+  }
+  #info-body { font-size: 12px; }
+
+  /* 图例精简 */
+  #legend { left: 8px; bottom: 8px; padding: 8px 10px; }
+  .legend-row { font-size: 11px; }
+
+  /* 时间轴与甘特图 */
+  #timeline { padding: 6px 8px 8px; }
+  .timeline-controls { gap: 8px; height: 36px; }
+  #time-label { min-width: 110px; font-size: 11px; }
+  #gantt { --name-w: 84px; max-height: 120px; }
+  .gantt-name { font-size: 10px; }
+  .gantt-badge { font-size: 9px; padding: 0 5px; }
+
+  #toast { bottom: 60px; max-width: 90vw; font-size: 12px; }
+}
+
+@media (max-width: 480px) {
+  .brand h1 { font-size: 12px; }
+  #toolbar { padding: 6px 8px; }
+  .toolbar-actions button { padding: 7px 8px; font-size: 11px; }
+  #time-label { display: none; }
+  #gantt { --name-w: 70px; }
+  #btn-demo { display: none; }
+}

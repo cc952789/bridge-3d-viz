@@ -6,6 +6,13 @@ const PENDING_COLOR = 0x3a4150
 const ACTIVE_COLOR = 0xff9800
 const DONE_COLOR = 0x4caf50
 
+// 实例化渲染构件（桩基）用的状态配色与透明度
+export const STATUS_STYLE = {
+  pending: { color: PENDING_COLOR, alpha: 0.12 },
+  active: { color: ACTIVE_COLOR, alpha: 0.92 },
+  done: { color: DONE_COLOR, alpha: 1 }
+}
+
 const DAY_MS = 86400000
 
 // 施工进度 4D 控制器：每个构件拥有独立的起止时间。
@@ -93,10 +100,16 @@ export class Schedule4D {
     for (const { object, group, id, schedId } of this.elements) {
       const st = this.statusFor(schedId || id, group, day)
       object.userData.status = st
-      object.visible = this.filter == null || st === this.filter
-      object.traverse((o) => {
-        if (o.isMesh && o.material) applyStatus(o, st)
-      })
+      const visible = this.filter == null || st === this.filter
+      if (object.userData.applyStatusOverride) {
+        // 实例化渲染的构件（桩基）：由构件自身维护颜色/可见性
+        object.userData.applyStatusOverride(st, visible)
+      } else {
+        object.visible = visible
+        object.traverse((o) => {
+          if (o.isMesh && o.material) applyStatus(o, st)
+        })
+      }
     }
   }
 
