@@ -4,7 +4,6 @@ import { buildDemoBridge } from './bridgeModel.js'
 import { Schedule4D, STATUS_LABEL } from './schedule4d.js'
 import { PanoramaViewer } from './panorama.js'
 import { createInfoPanel } from './infoPanel.js'
-import { loadIfcFile } from './ifcLoader.js'
 import { buildRealBridge, setTerrainOpacity } from './realBridge.js'
 import bridgesData from './data/bridges.json'
 import demoScheduleData from './data/schedule.json'
@@ -319,39 +318,117 @@ const GROUP_COLORS = {
   __other: '#556'
 }
 
-let ganttBars = new Map() // id -> { bar, item }
+let ganttBars = new Map() // id -> { bar, item, isGroup }
+const expandedGroups = new Set() // 已展开的墩级分组键
+
+// 墩级分组：施工单元编号如「卢福2号大桥Z-f-5-a0」→ { key: 桥+侧幅+墩号 }
+function pierGroupOf(item) {
+  const m = String(item.id).match(/^(.+[YZ])-(?:f|p|a)-(\d+)(?:-[a-z]?\d+)?$/)
+  return m ? { key: `${m[1]}-${m[2]}`, bridgeSide: m[1], no: m[2] } : null
+}
+
+// 按起止天数判定状态（用于分组头的聚合时间条）
+function rangeStatus(item, day) {
+  if (day < item.start) return 'pending'
+  if (day <= item.end) return 'active'
+  return 'done'
+}
+
+function makeGanttRow(item) {
+  const row = document.createElement('div')
+  row.className = 'gantt-row'
+  row.title = `${item.name}：第 ${item.start} ~ ${item.end} 天`
+
+  const name = document.createElement('span')
+  name.className = 'gantt-name'
+  name.textContent = item.name
+
+  const track = document.createElement('div')
+  track.className = 'gantt-track'
+
+  const bar = document.createElement('div')
+  bar.className = 'gantt-bar'
+  bar.style.left = `${(item.start / schedule.duration) * 100}%`
+  bar.style.width = `${Math.max(0.4, (item.end - item.start) / schedule.duration) * 100}%`
+  bar.style.background = GROUP_COLORS[item.group] || GROUP_COLORS.__other
+  track.append(bar)
+
+  row.append(name, track)
+  return { row, bar }
+}
+
+function jumpToItem(item) {
+  playing = false
+  updatePlayBtn()
+  slider.value = item.start
+  applyDay(item.start)
+}
 
 function buildGantt() {
   ganttRows.innerHTML = ''
   ganttBars = new Map()
+
+  // 按墩台分组；上部结构/桥面等无墩号的构件平铺
+  const groups = new Map()
+  const ungrouped = []
   for (const item of schedule.items) {
-    const row = document.createElement('div')
-    row.className = 'gantt-row'
-    row.title = `${item.name}：第 ${item.start} ~ ${item.end} 天`
+    const g = pierGroupOf(item)
+    if (g) {
+      if (!groups.has(g.key)) groups.set(g.key, [])
+      groups.get(g.key).push(item)
+    } else ungrouped.push(item)
+  }
 
-    const name = document.createElement('span')
-    name.className = 'gantt-name'
-    name.textContent = item.name
-
-    const track = document.createElement('div')
-    track.className = 'gantt-track'
-
-    const bar = document.createElement('div')
-    bar.className = 'gantt-bar'
-    bar.style.left = `${(item.start / schedule.duration) * 100}%`
-    bar.style.width = `${((item.end - item.start) / schedule.duration) * 100}%`
-    bar.style.background = GROUP_COLORS[item.group] || GROUP_COLORS.__other
-    track.append(bar)
-
-    row.append(name, track)
-    row.addEventListener('click', () => {
-      playing = false
-      updatePlayBtn()
-      slider.value = item.start
-      applyDay(item.start)
-    })
+  for (const item of ungrouped) {
+    const { row, bar } = makeGanttRow(item)
+    row.addEventListener('click', () => jumpToItem(item))
     ganttRows.append(row)
     ganttBars.set(item.id, { bar, item })
+  }
+
+  for (const [key, items] of groups) {
+    const sorted = [...items].sort((a, b) => String(a.id).localeCompare(String(b.id), 'zh'))
+    const g = pierGroupOf(sorted[0])
+    const isAbut = sorted.every((t) => /-a-\d+/.test(t.id))
+    const label = `${g.bridgeSide.endsWith('Y') ? '右幅' : '左幅'} ${g.no}#${isAbut ? '桥台' : '墩'}`
+    // 分组头：时间跨度 = 组内最早开工 ~ 最晚完工
+    const headerItem = {
+      id: key,
+      name: label,
+      group: sorted[0].group,
+      start: Math.min(...sorted.map((t) => t.start)),
+      end: Math.max(...sorted.map((t) => t.end))
+    }
+    const { row, bar } = makeGanttRow(headerItem)
+    row.classList.add('gantt-group')
+    const expanded = expandedGroups.has(key)
+    if (expanded) row.classList.add('open')
+    // 桩完成数徽章
+    const piles = sorted.filter((t) => /-(?:f|a)-\d+-[a-z]?\d+$/.test(t.id))
+    if (piles.length) {
+      const doneCount = piles.filter((t) => schedule.currentDay > t.end).length
+      const badge = document.createElement('span')
+      badge.className = 'gantt-badge'
+      badge.textContent = `${doneCount}/${piles.length}`
+      row.querySelector('.gantt-name').append(badge)
+    }
+    row.addEventListener('click', () => {
+      if (expandedGroups.has(key)) expandedGroups.delete(key)
+      else expandedGroups.add(key)
+      buildGantt()
+    })
+    ganttRows.append(row)
+    ganttBars.set(key, { bar, item: headerItem, isGroup: true })
+
+    if (expandedGroups.has(key)) {
+      for (const item of sorted) {
+        const { row: subRow, bar: subBar } = makeGanttRow(item)
+        subRow.classList.add('gantt-sub')
+        subRow.addEventListener('click', () => jumpToItem(item))
+        ganttRows.append(subRow)
+        ganttBars.set(item.id, { bar: subBar, item })
+      }
+    }
   }
   updateGantt()
 }
@@ -359,8 +436,11 @@ function buildGantt() {
 function updateGantt() {
   const frac = schedule.duration ? schedule.currentDay / schedule.duration : 0
   ganttPlayhead.style.left = `calc(var(--name-w) + (100% - var(--name-w)) * ${frac})`
-  for (const { bar, item } of ganttBars.values()) {
-    bar.className = 'gantt-bar ' + schedule.statusFor(item.id, item.group, schedule.currentDay)
+  for (const { bar, item, isGroup } of ganttBars.values()) {
+    const st = isGroup
+      ? rangeStatus(item, schedule.currentDay)
+      : schedule.statusFor(item.id, item.group, schedule.currentDay)
+    bar.className = 'gantt-bar ' + st
   }
 }
 
@@ -738,6 +818,9 @@ async function importIfc(file) {
         /* ignore */
       }
     }
+    // 按需加载：web-ifc 解析模块仅在真正导入 IFC 文件时才下载（减小首屏体积）
+    toast('正在下载 IFC 解析模块（首次约 1MB）…')
+    const { loadIfcFile } = await import('./ifcLoader.js')
     const result = await loadIfcFile(file, (n) => toast(`正在转换构件：${n}`))
     viewer.scene.add(result.group)
     currentModel = { group: result.group, elements: result.elements }

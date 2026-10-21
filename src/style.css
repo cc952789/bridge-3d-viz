@@ -201,6 +201,30 @@ button.active { background: var(--accent); border-color: var(--accent); color: #
 .gantt-name {
   font-size: 11px; color: var(--text-dim);
   padding: 0 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  display: flex; align-items: center; gap: 6px;
+}
+/* 墩级分组头 */
+.gantt-group {
+  position: relative;
+  background: rgba(77,141,255,.10);
+  font-weight: 600;
+}
+.gantt-group .gantt-name { color: var(--text); padding-left: 22px; }
+.gantt-group .gantt-bar { opacity: .85; }
+.gantt-group::before {
+  content: '▸';
+  position: absolute; left: 6px; top: 50%; transform: translateY(-50%);
+  font-size: 10px; color: var(--text-dim); pointer-events: none;
+  transition: transform .15s;
+}
+.gantt-group.open::before { transform: translateY(-50%) rotate(90deg); }
+.gantt-sub { padding-left: 0; }
+.gantt-sub .gantt-name { padding-left: 20px; color: var(--text-dim); }
+.gantt-badge {
+  font-size: 10px; font-weight: 500;
+  background: rgba(76,175,80,.25); color: #7fd28a;
+  border-radius: 8px; padding: 0 6px; line-height: 15px;
+  flex: none;
 }
 .gantt-track { position: relative; height: 100%; }
 .gantt-bar {
