@@ -362,7 +362,7 @@ function buildPier(parent, e, pos, zCenter, groundY, deckBottomHere, bid, sideLa
 
   // 墩身（独立构件）
   const colEl = newElement(pg, elements, {
-    id: `${bid}-col-${no}`, schedId: pSched, group: 'pier',
+    id: `${bid}-col-${no}`, schedId: `${pSched}-col`, group: 'pier',
     name: `${sideLabel} 墩身 P${no}`, no,
     props: { 构件类型: '柱式墩身', 柱径: e.colDia, 墩高: `${colH}m` }
   })
@@ -375,7 +375,7 @@ function buildPier(parent, e, pos, zCenter, groundY, deckBottomHere, bid, sideLa
 
   // 墩盖梁（独立构件）
   const beamEl = newElement(pg, elements, {
-    id: `${bid}-cbeam-${no}`, schedId: pSched, group: 'pier',
+    id: `${bid}-cbeam-${no}`, schedId: `${pSched}-beam`, group: 'pier',
     name: `${sideLabel} 墩盖梁 P${no}`, no,
     props: { 构件类型: '墩盖梁', 数量: e.capBeamQty || 1, 尺寸: `${cbh}×${cbw}×${cbl}m` }
   })
@@ -385,7 +385,7 @@ function buildPier(parent, e, pos, zCenter, groundY, deckBottomHere, bid, sideLa
   if (e.groundTie && e.groundTie !== '/') {
     const gt = nums(e.groundTie)
     const gtEl = newElement(pg, elements, {
-      id: `${bid}-gtie-${no}`, schedId: pSched, group: 'pier',
+      id: `${bid}-gtie-${no}`, schedId: `${pSched}-gtie`, group: 'pier',
       name: `${sideLabel} 地系梁 P${no}`, no,
       props: { 构件类型: '地系梁', 数量: e.groundTieQty || 1, 尺寸: `${gt[0] || 1.2}×${gt[1] || 1.0}m` }
     })
@@ -397,7 +397,7 @@ function buildPier(parent, e, pos, zCenter, groundY, deckBottomHere, bid, sideLa
     const mt = nums(e.midTie)
     const nBeams = Math.max(1, e.midTieQty || 1)
     const mtEl = newElement(pg, elements, {
-      id: `${bid}-mtie-${no}`, schedId: pSched, group: 'pier',
+      id: `${bid}-mtie-${no}`, schedId: `${pSched}-mtie`, group: 'pier',
       name: `${sideLabel} 中系梁 P${no}`, no,
       props: { 构件类型: '中系梁', 数量: nBeams, 尺寸: `${mt[0] || 1.0}×${mt[1] || 0.8}m` }
     })
@@ -436,7 +436,7 @@ function buildAbutment(parent, e, pos, zCenter, groundY, deckBottomHere, bid, si
     if (c) {
       const two = /^\s*2\s*[×xX*]/.test(e.cap)
       const capEl = newElement(ag, elements, {
-        id: `${bid}-acap-${no}`, schedId: aSched, group: 'abutment',
+        id: `${bid}-acap-${no}`, schedId: `${aSched}-cap`, group: 'abutment',
         name: `${sideLabel} ${label}桥台承台`, no,
         props: { 构件类型: '桥台承台', 数量: e.capQty || 1, 尺寸: `${c.w}×${c.l}×${c.h}m` }
       })
@@ -448,7 +448,7 @@ function buildAbutment(parent, e, pos, zCenter, groundY, deckBottomHere, bid, si
 
   // 台身 + 台盖梁（独立构件）
   const beamEl = newElement(ag, elements, {
-    id: `${bid}-abeam-${no}`, schedId: aSched, group: 'abutment',
+    id: `${bid}-abeam-${no}`, schedId: `${aSched}-beam`, group: 'abutment',
     name: `${sideLabel} ${label}桥台台盖梁`, no,
     props: { 构件类型: '台盖梁（含台身）', 数量: e.abutCapQty || 1, 尺寸: `${ac.h}×${ac.w}×${ac.l}m` }
   })
@@ -468,7 +468,7 @@ function buildAbutment(parent, e, pos, zCenter, groundY, deckBottomHere, bid, si
   if (e.rib && !isUType) {
     const rn = nums(e.rib)
     const ribEl = newElement(ag, elements, {
-      id: `${bid}-arib-${no}`, schedId: aSched, group: 'abutment',
+      id: `${bid}-arib-${no}`, schedId: `${aSched}-rib`, group: 'abutment',
       name: `${sideLabel} ${label}桥台肋板`, no,
       props: { 构件类型: '肋板', 数量: e.ribQty || 1, 规格: e.rib }
     })
@@ -483,7 +483,7 @@ function buildAbutment(parent, e, pos, zCenter, groundY, deckBottomHere, bid, si
 
   // 耳背墙（独立构件，立于台盖梁后缘上方，L 形，厚度取表值）
   const wallEl = newElement(ag, elements, {
-    id: `${bid}-awall-${no}`, schedId: aSched, group: 'abutment',
+    id: `${bid}-awall-${no}`, schedId: `${aSched}-wall`, group: 'abutment',
     name: `${sideLabel} ${label}桥台耳背墙`, no,
     props: { 构件类型: '耳背墙', 数量: e.backWallQty || 1, 尺寸: `${bw.h}×${bw.w}m` }
   })

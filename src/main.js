@@ -183,16 +183,34 @@ async function fetchPileLedger(manual = false) {
     if (data.mtimeMs === lastLedgerMtime) return // 数据没变化，跳过
     lastLedgerMtime = data.mtimeMs || 0
     lastLedgerData = data
-    const n = applyPileLedger(data)
-    if (n > 0) toast(`台账已同步：${n} 个构件完成时间已按灌注日期更新（${data.count} 条记录）`)
+    const n = applyLedger(data)
+    if (n > 0) toast(`台账已同步：${n} 个构件完成时间已按台账日期更新（${data.count} 条记录）`)
     else toast(`台账已读取：${data.count} 条记录，未匹配到当前桥梁的构件`)
   } catch (e) {
     if (manual) toast('无法读取台账：请把导出的台账命名为 pile-ledger.xlsx 放到项目根目录，然后双击「更新台账.bat」')
   }
 }
 
-// 把台账里的灌注混凝土日期写入排期：对应构件的"完工日"= 灌注日期
-function applyPileLedger(data) {
+// 台账「部位」列 → 构件单元类型
+// 无部位列（或为空）时默认按桩基处理，兼容只记录桩灌注日期的台账
+function unitTypeOf(type) {
+  const t = String(type || '').trim()
+  if (!t) return 'pile'
+  if (t.includes('桩')) return 'pile'
+  if (t.includes('承台')) return 'cap'
+  if (t.includes('肋')) return 'rib'
+  if (t.includes('耳') || t.includes('背墙')) return 'wall'
+  if (t.includes('盖梁') || t.includes('台帽') || t.includes('台身')) return 'beam'
+  if (t.includes('系梁')) return 'tie'
+  if (t.includes('墩身') || t.includes('墩柱') || t.includes('柱')) return 'col'
+  if (t.includes('箱梁') || t.includes('主梁') || t.includes('梁')) return 'super'
+  if (t.includes('桥面') || t.includes('铺装') || t.includes('护栏')) return 'deck'
+  return 'pile'
+}
+
+// 把台账记录写入排期：对应构件的"完工日"= 台账日期
+// 部位列支持：桩基/承台/墩身/盖梁/系梁/肋板/耳背墙/箱梁/桥面等全部构件类型
+function applyLedger(data) {
   if (!schedule.startDate || !data.records || !data.records.length) return 0
   let applied = 0
   for (const rec of data.records) {
@@ -202,23 +220,43 @@ function applyPileLedger(data) {
     const pier = String(rec.pier || '')
     const pierDigits = (pier.match(/\d+/g) || []).pop() || null
     const side = pier.includes('左') ? 'Z' : pier.includes('右') ? 'Y' : null
+    const ut = unitTypeOf(rec.type)
     // 桩号如「左幅5a-0#」/「左幅1-0#」→ 桩位标签（a0 / 0）
     let pileLabel = null
     const pm = String(rec.pileNo || '').match(/(\d+)([a-z])?-(\d+)(?=[#]?\s*$)/)
     if (pm) pileLabel = (pm[2] || '') + pm[3]
     for (const item of schedule.items) {
       if (bridge && !item.id.includes(bridge)) continue
-      // 施工单元编号形如「卢福2号大桥Z-f-5-a0」：
-      // 侧幅(Z=左/Y=右) + 类型(f=桩基/承台、a=桥台) + 墩号 + 桩位标签（单桩）或整体单元（承台）
-      // 灌注日期只标记桩基；墩身/盖梁/系梁（p 单元）在承台之后施工，不受桩灌注日期影响
-      const m = item.id.match(/([YZ])-(f|a)-(\d+)(?:-([a-z]?\d+))?$/)
-      if (!m) continue
-      if (pierDigits != null && m[3] !== pierDigits) continue
-      if (side && m[1] !== side) continue // 区分左右幅，避免左幅日期误套到右幅
-      if (pileLabel != null) {
-        if (m[4] !== pileLabel) continue // 有桩号时精确到单根桩
-      } else if (m[4] !== undefined) {
-        continue // 无桩号时只标记整墩基础单元（承台）
+      if (ut === 'super' || ut === 'deck') {
+        // 整桥构件（小箱梁/桥面系）：桥名 + 侧幅，且区分 super/deck 单元
+        const want = ut === 'super' ? 'super' : 'deck'
+        if (!item.id.endsWith(`-${want}`)) continue
+        const sm = item.id.match(/([YZ])-(?:super|deck)$/)
+        if (side && sm && sm[1] !== side) continue
+      } else {
+        // 墩台构件：施工单元编号形如「卢福2号大桥Z-f-5-a0」
+        // 侧幅(Z=左/Y=右) + 类型(f=桩基承台/p=墩身盖梁系梁/a=桥台) + 墩号 + 单元后缀
+        const m = item.id.match(/([YZ])-(f|p|a)-(\d+)(?:-(.*))?$/)
+        if (!m) continue
+        if (pierDigits != null && m[3] !== pierDigits) continue
+        if (side && m[1] !== side) continue // 区分左右幅，避免左幅日期误套到右幅
+        const suffix = m[4] || ''
+        if (ut === 'pile') {
+          if (pileLabel != null) { if (suffix !== pileLabel) continue } // 有桩号时精确到单根桩
+          else if (!/^[a-z]?\d+$/.test(suffix)) continue // 无桩号时标记该墩全部桩
+        } else if (ut === 'cap') {
+          if (suffix !== '' && suffix !== 'cap') continue
+        } else if (ut === 'beam') {
+          if (suffix !== 'beam') continue
+        } else if (ut === 'col') {
+          if (suffix !== 'col') continue
+        } else if (ut === 'tie') {
+          if (suffix !== 'gtie' && suffix !== 'mtie') continue
+        } else if (ut === 'rib') {
+          if (suffix !== 'rib') continue
+        } else if (ut === 'wall') {
+          if (suffix !== 'wall') continue
+        }
       }
       item.end = Math.max(0, Math.min(schedule.duration, day))
       if (item.start >= item.end) item.start = Math.max(0, item.end - 10)
@@ -323,7 +361,7 @@ function loadRealBridge(index) {
   slider.max = duration
   buildGantt()
   updateStats()
-  if (lastLedgerData) applyPileLedger(lastLedgerData)
+  if (lastLedgerData) applyLedger(lastLedgerData)
   fitCamera(group)
   applyToday()
   toast(`已载入 ${bridge.name}（${elements.length} 个施工单元）`)
@@ -348,7 +386,7 @@ function generateBridgeSchedule(elements) {
   const decks = all.filter((u) => u.group === 'deck')
 
   const items = []
-  // 未施工构件的默认排期整体规划到 2027 年；台账中已灌注的构件由 applyPileLedger 按实际日期覆盖
+  // 未施工构件的默认排期整体规划到 2027 年；台账记录的构件由 applyLedger 按实际日期覆盖
   const planStart = schedule.startDate
     ? Math.max(0, Math.round((Date.parse('2027-01-01') - schedule.startDate.getTime()) / 86400000))
     : 0
@@ -424,7 +462,7 @@ const expandedGroups = new Set() // 已展开的墩级分组键
 
 // 墩级分组：施工单元编号如「卢福2号大桥Z-f-5-a0」→ { key: 桥+侧幅+墩号 }
 function pierGroupOf(item) {
-  const m = String(item.id).match(/^(.+[YZ])-(?:f|p|a)-(\d+)(?:-[a-z]?\d+)?$/)
+  const m = String(item.id).match(/^(.+[YZ])-(?:f|p|a)-(\d+)(?:-.*)?$/)
   return m ? { key: `${m[1]}-${m[2]}`, bridgeSide: m[1], no: m[2] } : null
 }
 
