@@ -327,20 +327,24 @@ function buildPier(parent, e, pos, zCenter, groundY, deckBottomHere, bid, sideLa
   const pSched = `${bid}-p-${no}`
 
   // 桩基：每根桩按图纸编号拆分为独立构件
-  // 承台墩：4 根桩（a-0/a-1/b-0/b-1，两列×两排）；系梁墩（桩柱式）：2 根桩（0/1，一柱一桩）
-  const pileSpecs = cap
-    ? [
-        { label: 'a0', dx: -cap.x * 0.3, dz: -cap.z * 0.3 },
-        { label: 'b0', dx: cap.x * 0.3, dz: -cap.z * 0.3 },
-        { label: 'a1', dx: -cap.x * 0.3, dz: cap.z * 0.3 },
-        { label: 'b1', dx: cap.x * 0.3, dz: cap.z * 0.3 }
-      ]
-    : [
-        { label: '0', dx: 0, dz: -COL_SPACING / 2 },
-        { label: '1', dx: 0, dz: COL_SPACING / 2 }
-      ]
+  // 优先用图纸提取的真实桩位（e.piles：{label, s 沿桥, d 横向}）；
+  // 无数据时回退默认网格：承台墩 4 桩（a-0/a-1/b-0/b-1），系梁墩 2 桩（0/1，一柱一桩）
+  const pileSpecs = e.piles && e.piles.length
+    ? e.piles.map((p) => ({ label: p.label, dx: p.d, dz: p.s }))
+    : (cap
+        ? [
+            { label: 'a0', dx: -cap.x * 0.3, dz: -cap.z * 0.3 },
+            { label: 'b0', dx: cap.x * 0.3, dz: -cap.z * 0.3 },
+            { label: 'a1', dx: -cap.x * 0.3, dz: cap.z * 0.3 },
+            { label: 'b1', dx: cap.x * 0.3, dz: cap.z * 0.3 }
+          ]
+        : [
+            { label: '0', dx: 0, dz: -COL_SPACING / 2 },
+            { label: '1', dx: 0, dz: COL_SPACING / 2 }
+          ])
   for (const ps of pileSpecs) {
-    const pileNo = cap ? `${no}${ps.label[0]}-${ps.label[1]}` : `${no}-${ps.label}` // 图纸桩号，如 5a-0 / 1-0
+    const pm = ps.label.match(/^([a-z])?(\d+)$/)
+    const pileNo = pm[1] ? `${no}${pm[1]}-${pm[2]}` : `${no}-${pm[2]}` // 图纸桩号，如 5a-0 / 1-0
     const pileEl = newElement(pg, elements, {
       id: `${bid}-pile-${no}-${ps.label}`, schedId: `${fSched}-${ps.label}`, group: 'foundation',
       name: `${sideLabel} 桩基 ${pileNo}#`, no,
@@ -489,33 +493,37 @@ function buildAbutment(parent, e, pos, zCenter, groundY, deckBottomHere, bid, si
   })
   makeMesh(new THREE.BoxGeometry(bw.w, bw.h, ac.l), COLORS.abutment, wallEl, { x: -(ac.w / 2 + bw.w / 2), y: deckBottomHere + bw.h / 2, z: zCenter })
 
-  // 桩基：每根桩按图纸编号拆分为独立构件（默认 4 根 a-0/a-1/b-0/b-1；中新大桥桥台 2 根 0/1）
+  // 桩基：每根桩按图纸编号拆分为独立构件
+  // 优先用图纸提取的真实桩位；无数据时回退默认网格（4 根 a-0/a-1/b-0/b-1；中新大桥桥台 2 根 0/1）
   const aPileD = e.pileDia ? parseFloat(e.pileDia) : 1.2
   const aPileL = e.pileLen || 15
   const hasCap2 = e.cap && /^\s*2\s*[×xX*]/.test(e.cap)
-  const pileSpecs = abutPiles === 2
-    ? [
-        { label: '0', dx: -1.5, dz: 0 },
-        { label: '1', dx: 1.5, dz: 0 }
-      ]
-    : (hasCap2
+  const pileSpecs = e.piles && e.piles.length
+    ? e.piles.map((p) => ({ label: p.label, dx: p.d, dz: p.s }))
+    : (abutPiles === 2
         ? [
-            { label: 'a0', dx: -1.2, dz: -3.5 },
-            { label: 'b0', dx: 1.2, dz: -3.5 },
-            { label: 'a1', dx: -1.2, dz: 3.5 },
-            { label: 'b1', dx: 1.2, dz: 3.5 }
+            { label: '0', dx: -1.5, dz: 0 },
+            { label: '1', dx: 1.5, dz: 0 }
           ]
-        : [
-            { label: 'a0', dx: -1.5, dz: -2.5 },
-            { label: 'b0', dx: 1.5, dz: -2.5 },
-            { label: 'a1', dx: -1.5, dz: 2.5 },
-            { label: 'b1', dx: 1.5, dz: 2.5 }
-          ])
+        : (hasCap2
+            ? [
+                { label: 'a0', dx: -1.2, dz: -3.5 },
+                { label: 'b0', dx: 1.2, dz: -3.5 },
+                { label: 'a1', dx: -1.2, dz: 3.5 },
+                { label: 'b1', dx: 1.2, dz: 3.5 }
+              ]
+            : [
+                { label: 'a0', dx: -1.5, dz: -2.5 },
+                { label: 'b0', dx: 1.5, dz: -2.5 },
+                { label: 'a1', dx: -1.5, dz: 2.5 },
+                { label: 'b1', dx: 1.5, dz: 2.5 }
+              ]))
   // 桩头与承台底同高（有承台）或与地面线齐平
   const aCapH = e.cap && !isUType ? abutPileCapDims(e.cap)?.h || 0 : 0
   const aPileHeadY = groundY - aCapH
   for (const ps of pileSpecs) {
-    const pileNo = abutPiles === 2 ? `${no}-${ps.label}` : `${no}${ps.label[0]}-${ps.label[1]}` // 图纸桩号，如 0a-0 / 0-0
+    const pm = ps.label.match(/^([a-z])?(\d+)$/)
+    const pileNo = pm[1] ? `${no}${pm[1]}-${pm[2]}` : `${no}-${pm[2]}` // 图纸桩号，如 0a-0 / 0-0
     const pileEl = newElement(ag, elements, {
       id: `${bid}-apile-${no}-${ps.label}`, schedId: `${aSched}-${ps.label}`, group: 'abutment',
       name: `${sideLabel} ${label}桥台桩基 ${pileNo}#`, no,
